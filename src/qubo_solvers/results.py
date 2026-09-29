@@ -17,7 +17,8 @@ class OptimizationResult:
     """Assignments: (restarts, n); energies/counts/reasons: (restarts,).
 
     Histories: (samples, restarts), with matching (samples,) iteration indices.
-    Iterations count sweeps for annealing and accepted flips for greedy search.
+    Iterations count sweeps for Metropolis/Gibbs, accepted flips for greedy/tabu,
+    integration steps for continuous solvers, and additional samples for random search.
     Termination reasons are integer tensors encoded by TerminationReason.
     Assignment storage uses int8. In best-only mode final fields are None,
     best/diagnostic arrays have one row, and restart_indices holds its original

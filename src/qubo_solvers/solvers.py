@@ -1,7 +1,6 @@
-"""CPU-first search with native objectives and bounded restart working sets."""
+"""Shared execution, memory estimates, and structural solver interface."""
 
 from dataclasses import dataclass
-import math
 from typing import Protocol
 
 import torch
@@ -215,10 +214,14 @@ def _solve(solver, problem, restarts, initial, seed, interval, batch_size, best_
         _integer("history_interval", interval, 1)
     if best_only and interval is not None:
         raise ValueError("best_only does not support history_interval")
-    budget = solver.sweeps if isinstance(solver, SimulatedAnnealing) else solver.max_steps
+    budget = solver.sweeps if hasattr(solver, "sweeps") else solver.max_steps
     samples = (budget // interval + 1 + bool(budget % interval)) if interval else 0
     estimate = estimate_memory(problem, restarts=restarts, batch_size=batch_size,
                                best_only=best_only, history_samples=samples)
+    extra = getattr(solver, "_extra_workspace", lambda problem, batch: 0)(
+        problem, min(restarts, batch_size or restarts))
+    estimate = MemoryEstimate(estimate.problem_bytes, estimate.output_bytes,
+                              estimate.workspace_bytes + extra)
     if limit is not None:
         _integer("memory_limit_bytes", limit, 1)
         if estimate.total_bytes > limit:
@@ -268,88 +271,6 @@ def _solve(solver, problem, restarts, initial, seed, interval, batch_size, best_
                           "or reduce history storage; no automatic retry was attempted") from error
 
 
-@dataclass(frozen=True)
-class SimulatedAnnealing:
-    """Single-variable Metropolis search; one sweep uses start_temperature."""
-
-    sweeps: int
-    start_temperature: float
-    end_temperature: float
-
-    def __post_init__(self):
-        _integer("sweeps", self.sweeps, 0)
-        if not (math.isfinite(self.start_temperature) and math.isfinite(self.end_temperature)
-                and self.start_temperature >= self.end_temperature > 0):
-            raise ValueError("temperatures must be finite and start >= end > 0")
-
-    @torch.no_grad()
-    def solve(self, problem: Problem, *, restarts: int = 1,
-              initial_assignments: Tensor | None = None, seed: int | None = None,
-              history_interval: int | None = None, batch_size: int | None = None,
-              best_only: bool = False, memory_limit_bytes: int | None = None) -> OptimizationResult:
-        return _solve(self, problem, restarts, initial_assignments, seed, history_interval,
-                      batch_size, best_only, memory_limit_bytes)
-
-    def _search(self, run, record):
-        for sweep in range(self.sweeps):
-            fraction = sweep / max(self.sweeps - 1, 1)
-            temperature = math.exp((1 - fraction) * math.log(self.start_temperature)
-                                   + fraction * math.log(self.end_temperature))
-            order = torch.randperm(run.x.shape[1], generator=run.order_generator).tolist()
-            for column in order:
-                direction = -2 * run.x[:, column] if run.spin else 1 - 2 * run.x[:, column]
-                delta = direction * run.field[:, column]
-                if not run.spin:
-                    delta.add_(run.q[column, column])
-                uniform = torch.rand(run.x.shape[0], device=run.q.device, dtype=run.q.dtype,
-                                     generator=run.generator)
-                accepted = (delta <= 0) | (uniform < torch.exp(-delta.clamp_min(0) / temperature))
-                run.flip_column(column, accepted, delta)
-            run.iterations += 1
-            run.refresh()
-            record(sweep + 1)
-        return self.sweeps
-
-
-@dataclass(frozen=True)
-class GreedyLocalSearch:
-    """Best improving flip, lowest index on ties, periodic direct field refresh."""
-
-    max_steps: int
-    refresh_interval: int = 32
-
-    def __post_init__(self):
-        _integer("max_steps", self.max_steps, 0)
-        _integer("refresh_interval", self.refresh_interval, 1)
-
-    @torch.no_grad()
-    def solve(self, problem: Problem, *, restarts: int = 1,
-              initial_assignments: Tensor | None = None, seed: int | None = None,
-              history_interval: int | None = None, batch_size: int | None = None,
-              best_only: bool = False, memory_limit_bytes: int | None = None) -> OptimizationResult:
-        return _solve(self, problem, restarts, initial_assignments, seed, history_interval,
-                      batch_size, best_only, memory_limit_bytes)
-
-    def _search(self, run, record):
-        step = 0
-        done = torch.zeros_like(run.iterations, dtype=torch.bool)
-        for step in range(1, self.max_steps + 1):
-            delta, columns = run.deltas().min(dim=1)
-            if ((delta >= 0) & ~done).any():
-                # Confirm apparent local optima with directly recomputed fields.
-                run.refresh_field()
-                delta, columns = run.deltas().min(dim=1)
-                done |= delta >= 0
-            accepted = (delta < 0) & ~done
-            if not accepted.any():
-                step -= 1
-                break
-            run.flip_rows(columns, accepted, delta)
-            run.iterations += accepted
-            if step % self.refresh_interval == 0:
-                run.refresh()
-            record(step)
-        run.refresh_field()
-        local = run.deltas().min(dim=1).values >= 0
-        run.reasons[local] = TerminationReason.LOCAL_OPTIMUM
-        return step
+# Compatibility imports; implementations each live in their own module.
+from .simulated_annealing import SimulatedAnnealing
+from .greedy_local_search import GreedyLocalSearch

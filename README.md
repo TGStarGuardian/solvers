@@ -185,3 +185,42 @@ Reproduce the current side with:
 ```sh
 python benchmarks/optimization.py --source src --include-batching --output /tmp/optimization.json
 ```
+
+## Additional classical solvers
+
+Every solver accepts unconstrained `QUBO` or `Ising` and lives in its own module.
+The problem's device selects CPU or CUDA execution:
+
+```python
+from qubo_solvers import QUBO, TransverseRoute, TabuSearch
+
+problem = QUBO(Q).to(device="cuda", dtype=torch.float32)
+solver = TransverseRoute(max_steps=500)
+result = solver.solve(problem, restarts=128, batch_size=32, seed=7)
+print(result.best_energy)
+
+# A separate solver, with its own output; no implicit refinement stage.
+tabu_result = TabuSearch(max_steps=500, tenure=7).solve(problem, restarts=128, seed=7)
+```
+
+Also available: `HeatBathAnnealing`, `SpinVectorLangevin`, `AngularAnnealing`,
+`EasyAxisAnnealing`, `SpinCoherentAnnealing`, `VectorAmplitudeAnnealing`,
+`MeanFieldAnnealing`, `TAPAnnealing`, `SphericalAnnealing`, `ContactAnnealing`,
+`ReplicaAnnealing`, `ExchangeCascade`, and `RandomSearch`.
+
+New solvers expose `solver.estimate_memory(problem, restarts=..., batch_size=...)`
+for their auxiliary working state. All retain the common result, explicit device
+transfer, best-only, and energy-history contracts. Continuous solver iteration
+counts are integration steps. No quantum simulation or constrained-problem API is
+included. See [the catalogue](docs/SOLVER_CATALOGUE.md) for equations, selected
+integrators, source provenance, and the report-based patent selection.
+
+Reproduce random/Biq Mac characterization with:
+
+```bash
+PYTHONPATH=src python benchmarks/catalogue.py --device cpu --output cpu.json
+PYTHONPATH=src python benchmarks/catalogue.py --device cuda --output cuda.json
+```
+
+Each solver is scored directly; there is no postprocessing solver. These are
+heuristic comparisons, not assertions of global optimality or GPU speedup.
