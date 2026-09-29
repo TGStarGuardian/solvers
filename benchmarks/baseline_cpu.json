@@ -1,0 +1,297 @@
+{
+  "environment": {
+    "platform": "Linux-6.8.0-142-generic-x86_64-with-glibc2.39",
+    "processor": "AMD Ryzen 7 5825U with Radeon Graphics",
+    "python": "3.12.3",
+    "torch": "2.14.0+cpu",
+    "cuda_runtime": null,
+    "threads": 1
+  },
+  "configuration": {
+    "sizes": [
+      32,
+      128
+    ],
+    "restarts": [
+      1,
+      32
+    ],
+    "devices": [
+      "cpu",
+      "cuda"
+    ],
+    "dtype": "float32",
+    "budget": 20,
+    "warmup": 1,
+    "repeats": 3,
+    "threads": 1,
+    "output": "benchmarks/baseline_cpu.json"
+  },
+  "seed": 1729,
+  "records": [
+    {
+      "device": "cpu",
+      "n_variables": 32,
+      "restarts": 1,
+      "dtype": "float32",
+      "solver": "GreedyLocalSearch",
+      "solver_configuration": {
+        "max_steps": 20
+      },
+      "resident": {
+        "median_seconds": 0.001797085999896808,
+        "samples_seconds": [
+          0.0017894319998958963,
+          0.001797085999896808,
+          0.001987308000025223
+        ]
+      },
+      "end_to_end": {
+        "median_seconds": 0.0020871090000582626,
+        "samples_seconds": [
+          0.0020871090000582626,
+          0.002174855999328429,
+          0.0020199709997541504
+        ]
+      },
+      "best_energy": -9.574078559875488,
+      "mean_best_energy": -9.574078559875488,
+      "mean_final_energy": -9.574078559875488,
+      "process_peak_rss_bytes": 232374272,
+      "cuda_peak_allocated_bytes": null
+    },
+    {
+      "device": "cpu",
+      "n_variables": 32,
+      "restarts": 1,
+      "dtype": "float32",
+      "solver": "SimulatedAnnealing",
+      "solver_configuration": {
+        "sweeps": 20,
+        "start_temperature": 2.0,
+        "end_temperature": 0.05
+      },
+      "resident": {
+        "median_seconds": 0.1500883110002178,
+        "samples_seconds": [
+          0.14566628400007176,
+          0.1500883110002178,
+          0.15326728800027922
+        ]
+      },
+      "end_to_end": {
+        "median_seconds": 0.1493555919996652,
+        "samples_seconds": [
+          0.15166904300076567,
+          0.1493555919996652,
+          0.13665360899994994
+        ]
+      },
+      "best_energy": -9.923423767089844,
+      "mean_best_energy": -9.923423767089844,
+      "mean_final_energy": -9.923423767089844,
+      "process_peak_rss_bytes": 233947136,
+      "cuda_peak_allocated_bytes": null
+    },
+    {
+      "device": "cpu",
+      "n_variables": 32,
+      "restarts": 32,
+      "dtype": "float32",
+      "solver": "GreedyLocalSearch",
+      "solver_configuration": {
+        "max_steps": 20
+      },
+      "resident": {
+        "median_seconds": 0.005300665000504523,
+        "samples_seconds": [
+          0.005300665000504523,
+          0.005297648999658122,
+          0.005339388000720646
+        ]
+      },
+      "end_to_end": {
+        "median_seconds": 0.005425361999186862,
+        "samples_seconds": [
+          0.005379944999731379,
+          0.005557745000260184,
+          0.005425361999186862
+        ]
+      },
+      "best_energy": -11.060806274414062,
+      "mean_best_energy": -9.900404930114746,
+      "mean_final_energy": -9.900404930114746,
+      "process_peak_rss_bytes": 234471424,
+      "cuda_peak_allocated_bytes": null
+    },
+    {
+      "device": "cpu",
+      "n_variables": 32,
+      "restarts": 32,
+      "dtype": "float32",
+      "solver": "SimulatedAnnealing",
+      "solver_configuration": {
+        "sweeps": 20,
+        "start_temperature": 2.0,
+        "end_temperature": 0.05
+      },
+      "resident": {
+        "median_seconds": 0.1143389680000837,
+        "samples_seconds": [
+          0.12355493499944714,
+          0.1143389680000837,
+          0.10464049000074738
+        ]
+      },
+      "end_to_end": {
+        "median_seconds": 0.09372430099938356,
+        "samples_seconds": [
+          0.09743829099988943,
+          0.09372430099938356,
+          0.08706391499981692
+        ]
+      },
+      "best_energy": -11.060806274414062,
+      "mean_best_energy": -10.78631591796875,
+      "mean_final_energy": -10.738105773925781,
+      "process_peak_rss_bytes": 234471424,
+      "cuda_peak_allocated_bytes": null
+    },
+    {
+      "device": "cpu",
+      "n_variables": 128,
+      "restarts": 1,
+      "dtype": "float32",
+      "solver": "GreedyLocalSearch",
+      "solver_configuration": {
+        "max_steps": 20
+      },
+      "resident": {
+        "median_seconds": 0.002933992999714974,
+        "samples_seconds": [
+          0.0029982749992996105,
+          0.0028346429999146494,
+          0.002933992999714974
+        ]
+      },
+      "end_to_end": {
+        "median_seconds": 0.0031237540006259223,
+        "samples_seconds": [
+          0.0032306080001944792,
+          0.0031237540006259223,
+          0.0031183640003291657
+        ]
+      },
+      "best_energy": -38.83201599121094,
+      "mean_best_energy": -38.83201599121094,
+      "mean_final_energy": -38.83201599121094,
+      "process_peak_rss_bytes": 234995712,
+      "cuda_peak_allocated_bytes": null
+    },
+    {
+      "device": "cpu",
+      "n_variables": 128,
+      "restarts": 1,
+      "dtype": "float32",
+      "solver": "SimulatedAnnealing",
+      "solver_configuration": {
+        "sweeps": 20,
+        "start_temperature": 2.0,
+        "end_temperature": 0.05
+      },
+      "resident": {
+        "median_seconds": 0.2709776519996012,
+        "samples_seconds": [
+          0.2709776519996012,
+          0.2721536429999105,
+          0.26958525699956226
+        ]
+      },
+      "end_to_end": {
+        "median_seconds": 0.28386729399971955,
+        "samples_seconds": [
+          0.269557696999982,
+          0.2916645069999504,
+          0.28386729399971955
+        ]
+      },
+      "best_energy": -55.72357940673828,
+      "mean_best_energy": -55.72357940673828,
+      "mean_final_energy": -55.72357940673828,
+      "process_peak_rss_bytes": 234995712,
+      "cuda_peak_allocated_bytes": null
+    },
+    {
+      "device": "cpu",
+      "n_variables": 128,
+      "restarts": 32,
+      "dtype": "float32",
+      "solver": "GreedyLocalSearch",
+      "solver_configuration": {
+        "max_steps": 20
+      },
+      "resident": {
+        "median_seconds": 0.004581122999297804,
+        "samples_seconds": [
+          0.005302606999975978,
+          0.004361583999525465,
+          0.004581122999297804
+        ]
+      },
+      "end_to_end": {
+        "median_seconds": 0.004514405000008992,
+        "samples_seconds": [
+          0.004552016999696207,
+          0.0044019010001647985,
+          0.004514405000008992
+        ]
+      },
+      "best_energy": -40.403804779052734,
+      "mean_best_energy": -33.56467819213867,
+      "mean_final_energy": -33.56467819213867,
+      "process_peak_rss_bytes": 235257856,
+      "cuda_peak_allocated_bytes": null
+    },
+    {
+      "device": "cpu",
+      "n_variables": 128,
+      "restarts": 32,
+      "dtype": "float32",
+      "solver": "SimulatedAnnealing",
+      "solver_configuration": {
+        "sweeps": 20,
+        "start_temperature": 2.0,
+        "end_temperature": 0.05
+      },
+      "resident": {
+        "median_seconds": 0.30534294199969736,
+        "samples_seconds": [
+          0.30255225299970334,
+          0.30534294199969736,
+          0.30652850400019815
+        ]
+      },
+      "end_to_end": {
+        "median_seconds": 0.3053777920003995,
+        "samples_seconds": [
+          0.3048366889997851,
+          0.3082345709999572,
+          0.3053777920003995
+        ]
+      },
+      "best_energy": -56.45365524291992,
+      "mean_best_energy": -55.84471893310547,
+      "mean_final_energy": -55.791160583496094,
+      "process_peak_rss_bytes": 235257856,
+      "cuda_peak_allocated_bytes": null
+    }
+  ],
+  "skipped": [
+    {
+      "device": "cuda",
+      "reason": "CUDA unavailable; validation and benchmarking pending"
+    }
+  ],
+  "memory_notes": "CPU RSS is cumulative process high-water mark, not per-solve allocation. CUDA peak includes resident problem and results.",
+  "workload": "Dense symmetric Gaussian QUBO, coefficients scaled by sqrt(n), offset zero; no history."
+}

@@ -1,0 +1,355 @@
+"""CPU-first search with native objectives and bounded restart working sets."""
+
+from dataclasses import dataclass
+import math
+from typing import Protocol
+
+import torch
+from torch import Tensor
+
+from .problems import Ising, Problem, QUBO, _assignments
+from .results import OptimizationResult, TerminationReason
+
+
+def _integer(name: str, value: int, minimum: int) -> None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise ValueError(f"{name} must be an integer >= {minimum}")
+
+
+def _matrix(problem: Problem) -> Tensor:
+    if not isinstance(problem, (QUBO, Ising)):
+        raise TypeError("problem must be QUBO or Ising")
+    return problem.J if isinstance(problem, Ising) else problem.Q
+
+
+@dataclass(frozen=True)
+class MemoryEstimate:
+    """Tensor bytes only; workspace is conservative, not an allocator guarantee.
+
+    Excludes caller initial assignments, Python, allocator caches, BLAS/CUDA
+    workspaces and context. Problem storage is included in total_bytes.
+    """
+
+    problem_bytes: int
+    output_bytes: int
+    workspace_bytes: int
+
+    @property
+    def total_bytes(self) -> int:
+        return self.problem_bytes + self.output_bytes + self.workspace_bytes
+
+
+def estimate_memory(problem: Problem, *, restarts: int = 1,
+                    batch_size: int | None = None, best_only: bool = False,
+                    history_samples: int = 0) -> MemoryEstimate:
+    """Estimate before solving; histories require full-result mode."""
+    q = _matrix(problem)
+    _integer("restarts", restarts, 1)
+    _integer("history_samples", history_samples, 0)
+    if batch_size is not None:
+        _integer("batch_size", batch_size, 1)
+    if best_only and history_samples:
+        raise ValueError("best_only does not support histories")
+    b = min(restarts, batch_size or restarts)
+    n, width = problem.n_variables, q.element_size()
+    problem_bytes = q.numel() * width + width
+    if isinstance(problem, Ising):
+        problem_bytes += n * width
+    output = (n + width + 24 if best_only else
+              2 * restarts * n + restarts * (2 * width + 16)
+              + history_samples * (restarts * width + 8))
+    workspace = 12 * b * n * width + 32 * b * width + 16 * n
+    return MemoryEstimate(problem_bytes, output, workspace)
+
+
+class Solver(Protocol):
+    def solve(
+        self, problem: Problem, *, restarts: int = 1,
+        initial_assignments: Tensor | None = None, seed: int | None = None,
+        history_interval: int | None = None, batch_size: int | None = None,
+        best_only: bool = False, memory_limit_bytes: int | None = None,
+    ) -> OptimizationResult: ...
+
+
+class _Run:
+    """One batch; shares immutable problem storage, owns mutable search tensors."""
+
+    def __init__(self, problem, restarts, initial, generator, order_generator):
+        self.problem = problem
+        self.q = _matrix(problem)
+        self.spin = isinstance(problem, Ising)
+        self.generator = generator
+        self.order_generator = order_generator
+        shape = (restarts, problem.n_variables)
+        if initial is None:
+            self.x = torch.empty(shape, device=self.q.device, dtype=self.q.dtype)
+            self.x.bernoulli_(0.5, generator=generator)
+            if self.spin:
+                self.x.mul_(2).sub_(1)
+        else:
+            self.x = initial.to(dtype=self.q.dtype, copy=True)
+        self.field = torch.empty_like(self.x)
+        self.best_x = self.x.clone()
+        self.rows = torch.arange(restarts, device=self.q.device)
+        self.iterations = torch.zeros(restarts, dtype=torch.int64, device=self.q.device)
+        self.reasons = torch.zeros_like(self.iterations)
+        self.refresh_field()
+        self.best = self.energies.clone()
+
+    def refresh_field(self):
+        torch.mm(self.x, self.q, out=self.field)
+        self.energies = (self.field * self.x).sum(dim=1)
+        self.field.mul_(2)
+        if self.spin:
+            self.energies.add_((self.x * self.problem.h).sum(dim=1))
+            self.field.add_(self.problem.h)
+
+    def deltas(self):
+        direction = -2 * self.x if self.spin else 1 - 2 * self.x
+        delta = direction * self.field
+        if not self.spin:
+            delta.add_(self.q.diagonal())
+        return delta
+
+    def remember(self):
+        improved = self.energies < self.best
+        torch.where(improved[:, None], self.x, self.best_x, out=self.best_x)
+        torch.minimum(self.best, self.energies, out=self.best)
+
+    def flip_column(self, column, accepted, delta):
+        """Annealing uses one shared row view, without a batched row gather."""
+        x = self.x[:, column]
+        direction = (-2 * x if self.spin else 1 - 2 * x) * accepted
+        x.add_(direction)
+        self.field.addcmul_(direction[:, None], self.q[column], value=2)
+        self.energies.add_(delta * accepted)
+        self.remember()
+
+    def flip_rows(self, columns, accepted, delta):
+        x = self.x[self.rows, columns]
+        direction = (-2 * x if self.spin else 1 - 2 * x) * accepted
+        self.x[self.rows, columns] += direction
+        self.field.addcmul_(direction[:, None], self.q[columns], value=2)
+        self.energies.add_(delta * accepted)
+        self.remember()
+
+    def refresh(self):
+        self.refresh_field()
+        # Direct comparison without the constant offset.
+        self.best = ((self.best_x @ self.q) * self.best_x).sum(dim=1)
+        if self.spin:
+            self.best.add_((self.best_x * self.problem.h).sum(dim=1))
+        self.remember()
+
+
+class _Output:
+    """Preallocated full results, or just one retained winner across batches."""
+
+    def __init__(self, problem, restarts, best_only, interval, budget):
+        self.problem = problem
+        q = _matrix(problem)
+        self.best_only = best_only
+        count = 1 if best_only else restarts
+        self.best_x = torch.empty((count, problem.n_variables), device=q.device, dtype=torch.int8)
+        self.best_e = torch.full((count,), float('inf'), device=q.device, dtype=q.dtype)
+        self.iterations = torch.empty(count, device=q.device, dtype=torch.int64)
+        self.reasons = torch.empty_like(self.iterations)
+        self.final_x = None if best_only else torch.empty_like(self.best_x)
+        self.final_e = None if best_only else torch.empty_like(self.best_e)
+        self.winner = torch.zeros(1, device=q.device, dtype=torch.int64) if best_only else None
+        self.steps = list(range(0, budget + 1, interval)) if interval else []
+        if interval and self.steps[-1] != budget:
+            self.steps.append(budget)
+        self.history = (torch.empty((len(self.steps), restarts), device=q.device, dtype=q.dtype)
+                        if interval else None)
+        self.max_step = 0
+        self.has_winner = False
+
+    def finish_batch(self, run, start, step):
+        run.refresh()
+        final_e = run.problem._energy(run.x)
+        best_e = run.problem._energy(run.best_x)
+        improved = final_e < best_e
+        torch.where(improved[:, None], run.x, run.best_x, out=run.best_x)
+        torch.minimum(final_e, best_e, out=best_e)
+        if self.best_only:
+            index = best_e.argmin()
+            improve = (best_e[index] < self.best_e[0]) | (not self.has_winner)
+            # copy_ prevents retaining views into completed batch tensors.
+            self.best_x[0].copy_(torch.where(improve, run.best_x[index], self.best_x[0]))
+            self.best_e[0].copy_(torch.where(improve, best_e[index], self.best_e[0]))
+            self.iterations[0].copy_(torch.where(improve, run.iterations[index], self.iterations[0]))
+            self.reasons[0].copy_(torch.where(improve, run.reasons[index], self.reasons[0]))
+            self.winner[0].copy_(torch.where(improve, index + start, self.winner[0]))
+            self.has_winner = True
+        else:
+            end = start + run.x.shape[0]
+            self.final_x[start:end].copy_(run.x)
+            self.best_x[start:end].copy_(run.best_x)
+            self.final_e[start:end].copy_(final_e)
+            self.best_e[start:end].copy_(best_e)
+            self.iterations[start:end].copy_(run.iterations)
+            self.reasons[start:end].copy_(run.reasons)
+        self.max_step = max(self.max_step, step)
+
+    def result(self):
+        history, indices = self.history, None
+        if history is not None:
+            length = sum(step <= self.max_step for step in self.steps)
+            if self.steps[length - 1] != self.max_step:
+                history[length].copy_(self.final_e)
+                selected = self.steps[:length] + [self.max_step]
+                length += 1
+            else:
+                selected = self.steps[:length]
+                history[length - 1].copy_(self.final_e)
+            history = history[:length]
+            indices = torch.tensor(selected, device=history.device, dtype=torch.int64)
+        return OptimizationResult(self.final_x, self.final_e, self.best_x, self.best_e,
+                                  self.iterations, self.reasons, history, indices, self.winner)
+
+
+def _solve(solver, problem, restarts, initial, seed, interval, batch_size, best_only, limit):
+    q = _matrix(problem)
+    if interval is not None:
+        _integer("history_interval", interval, 1)
+    if best_only and interval is not None:
+        raise ValueError("best_only does not support history_interval")
+    budget = solver.sweeps if isinstance(solver, SimulatedAnnealing) else solver.max_steps
+    samples = (budget // interval + 1 + bool(budget % interval)) if interval else 0
+    estimate = estimate_memory(problem, restarts=restarts, batch_size=batch_size,
+                               best_only=best_only, history_samples=samples)
+    if limit is not None:
+        _integer("memory_limit_bytes", limit, 1)
+        if estimate.total_bytes > limit:
+            raise MemoryError(f"estimated tensor storage {estimate.total_bytes} bytes exceeds "
+                              f"memory_limit_bytes={limit}; reduce batch_size or use best_only")
+    if initial is not None:
+        if not isinstance(initial, Tensor) or initial.shape != (restarts, problem.n_variables):
+            raise ValueError("initial_assignments must have shape (restarts, n_variables)")
+    b = min(restarts, batch_size or restarts)
+    # Validate by batch without casting a full restart array or allocating its mask.
+    if initial is not None:
+        for start in range(0, restarts, b):
+            _assignments(initial[start:start + b], q, isinstance(problem, Ising), cast=False)
+    generator = torch.Generator(device=q.device)
+    generator.seed() if seed is None else generator.manual_seed(seed)
+    order = torch.Generator().manual_seed(generator.initial_seed())
+    try:
+        output = _Output(problem, restarts, best_only, interval, budget)
+        for start in range(0, restarts, b):
+            count = min(b, restarts - start)
+            run = _Run(problem, count, None if initial is None else initial[start:start + count],
+                       generator, order)
+            history_cursor = 0
+
+            def record(step):
+                nonlocal history_cursor
+                if output.history is not None and history_cursor < len(output.steps):
+                    if step == output.steps[history_cursor]:
+                        output.history[history_cursor, start:start + count].copy_(problem._energy(run.x))
+                        history_cursor += 1
+
+            record(0)
+            step = solver._search(run, record)
+            output.finish_batch(run, start, step)
+            if output.history is not None and history_cursor < len(output.steps):
+                output.history[history_cursor:, start:start + count].copy_(output.final_e[start:start + count])
+            del run
+        return output.result()
+    except RuntimeError as error:
+        message = str(error).lower()
+        if not isinstance(error, torch.OutOfMemoryError) and not any(
+            phrase in message for phrase in ("out of memory", "can't allocate memory")
+        ):
+            raise
+        raise MemoryError(f"solve allocation failed (estimated tensor storage "
+                          f"{estimate.total_bytes} bytes); reduce batch_size, use best_only, "
+                          "or reduce history storage; no automatic retry was attempted") from error
+
+
+@dataclass(frozen=True)
+class SimulatedAnnealing:
+    """Single-variable Metropolis search; one sweep uses start_temperature."""
+
+    sweeps: int
+    start_temperature: float
+    end_temperature: float
+
+    def __post_init__(self):
+        _integer("sweeps", self.sweeps, 0)
+        if not (math.isfinite(self.start_temperature) and math.isfinite(self.end_temperature)
+                and self.start_temperature >= self.end_temperature > 0):
+            raise ValueError("temperatures must be finite and start >= end > 0")
+
+    @torch.no_grad()
+    def solve(self, problem: Problem, *, restarts: int = 1,
+              initial_assignments: Tensor | None = None, seed: int | None = None,
+              history_interval: int | None = None, batch_size: int | None = None,
+              best_only: bool = False, memory_limit_bytes: int | None = None) -> OptimizationResult:
+        return _solve(self, problem, restarts, initial_assignments, seed, history_interval,
+                      batch_size, best_only, memory_limit_bytes)
+
+    def _search(self, run, record):
+        for sweep in range(self.sweeps):
+            fraction = sweep / max(self.sweeps - 1, 1)
+            temperature = math.exp((1 - fraction) * math.log(self.start_temperature)
+                                   + fraction * math.log(self.end_temperature))
+            order = torch.randperm(run.x.shape[1], generator=run.order_generator).tolist()
+            for column in order:
+                direction = -2 * run.x[:, column] if run.spin else 1 - 2 * run.x[:, column]
+                delta = direction * run.field[:, column]
+                if not run.spin:
+                    delta.add_(run.q[column, column])
+                uniform = torch.rand(run.x.shape[0], device=run.q.device, dtype=run.q.dtype,
+                                     generator=run.generator)
+                accepted = (delta <= 0) | (uniform < torch.exp(-delta.clamp_min(0) / temperature))
+                run.flip_column(column, accepted, delta)
+            run.iterations += 1
+            run.refresh()
+            record(sweep + 1)
+        return self.sweeps
+
+
+@dataclass(frozen=True)
+class GreedyLocalSearch:
+    """Best improving flip, lowest index on ties, periodic direct field refresh."""
+
+    max_steps: int
+    refresh_interval: int = 32
+
+    def __post_init__(self):
+        _integer("max_steps", self.max_steps, 0)
+        _integer("refresh_interval", self.refresh_interval, 1)
+
+    @torch.no_grad()
+    def solve(self, problem: Problem, *, restarts: int = 1,
+              initial_assignments: Tensor | None = None, seed: int | None = None,
+              history_interval: int | None = None, batch_size: int | None = None,
+              best_only: bool = False, memory_limit_bytes: int | None = None) -> OptimizationResult:
+        return _solve(self, problem, restarts, initial_assignments, seed, history_interval,
+                      batch_size, best_only, memory_limit_bytes)
+
+    def _search(self, run, record):
+        step = 0
+        done = torch.zeros_like(run.iterations, dtype=torch.bool)
+        for step in range(1, self.max_steps + 1):
+            delta, columns = run.deltas().min(dim=1)
+            if ((delta >= 0) & ~done).any():
+                # Confirm apparent local optima with directly recomputed fields.
+                run.refresh_field()
+                delta, columns = run.deltas().min(dim=1)
+                done |= delta >= 0
+            accepted = (delta < 0) & ~done
+            if not accepted.any():
+                step -= 1
+                break
+            run.flip_rows(columns, accepted, delta)
+            run.iterations += accepted
+            if step % self.refresh_interval == 0:
+                run.refresh()
+            record(step)
+        run.refresh_field()
+        local = run.deltas().min(dim=1).values >= 0
+        run.reasons[local] = TerminationReason.LOCAL_OPTIMUM
+        return step

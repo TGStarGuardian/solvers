@@ -1,0 +1,292 @@
+{
+  "platform": "Linux-6.8.0-142-generic-x86_64-with-glibc2.39",
+  "threads": 1,
+  "dtype": "float32",
+  "seed": 1729,
+  "warmup": "one cold call, then three timed calls",
+  "estimated_tensor_cap_bytes": 268435456,
+  "memory_notes": "Fresh process per case. RSS includes Python/PyTorch/input; growth is above prior RSS high-water mark, not exact live tensor peak. Operator allocation is cumulative positive self allocation by operator, not peak memory. Profiling occurs after timing/RSS measurement.",
+  "records": [
+    {
+      "case": {
+        "n": 256,
+        "restarts": 32,
+        "kind": "qubo",
+        "op": "construct"
+      },
+      "median_seconds": 0.0005492099999173661,
+      "samples_seconds": [
+        0.0005492099999173661,
+        0.0005877020003026701,
+        0.0005118389999552164
+      ],
+      "cold_process_peak_rss_bytes": 228990976,
+      "cold_high_water_growth_bytes": 524288,
+      "positive_operator_allocation_bytes": 1507344,
+      "best_energy": null,
+      "torch": "2.14.0+cpu",
+      "python": "3.12.3"
+    },
+    {
+      "case": {
+        "n": 256,
+        "restarts": 32,
+        "kind": "qubo",
+        "op": "greedy"
+      },
+      "median_seconds": 0.012386130000777484,
+      "samples_seconds": [
+        0.012645451000025787,
+        0.012339502000031644,
+        0.012386130000777484
+      ],
+      "cold_process_peak_rss_bytes": 233783296,
+      "cold_high_water_growth_bytes": 5373952,
+      "positive_operator_allocation_bytes": 9263476,
+      "best_energy": -46.78196334838867,
+      "torch": "2.14.0+cpu",
+      "python": "3.12.3"
+    },
+    {
+      "case": {
+        "n": 256,
+        "restarts": 32,
+        "kind": "qubo",
+        "op": "annealing"
+      },
+      "median_seconds": 0.09553707799932454,
+      "samples_seconds": [
+        0.10039851800047472,
+        0.09553707799932454,
+        0.09221471100045164
+      ],
+      "cold_process_peak_rss_bytes": 234557440,
+      "cold_high_water_growth_bytes": 6029312,
+      "positive_operator_allocation_bytes": 78980408,
+      "best_energy": -102.97360229492188,
+      "torch": "2.14.0+cpu",
+      "python": "3.12.3"
+    },
+    {
+      "case": {
+        "n": 256,
+        "restarts": 32,
+        "kind": "ising",
+        "op": "construct"
+      },
+      "median_seconds": 0.00033720900046319,
+      "samples_seconds": [
+        0.00033720900046319,
+        0.00030935599988879403,
+        0.00033909200010384666
+      ],
+      "cold_process_peak_rss_bytes": 229957632,
+      "cold_high_water_growth_bytes": 524288,
+      "positive_operator_allocation_bytes": 1510180,
+      "best_energy": null,
+      "torch": "2.14.0+cpu",
+      "python": "3.12.3"
+    },
+    {
+      "case": {
+        "n": 256,
+        "restarts": 32,
+        "kind": "ising",
+        "op": "greedy"
+      },
+      "median_seconds": 0.006600921999961429,
+      "samples_seconds": [
+        0.0069260469999790075,
+        0.006600921999961429,
+        0.006292979000136256
+      ],
+      "cold_process_peak_rss_bytes": 234893312,
+      "cold_high_water_growth_bytes": 5636096,
+      "positive_operator_allocation_bytes": 11758480,
+      "best_energy": -171.833740234375,
+      "torch": "2.14.0+cpu",
+      "python": "3.12.3"
+    },
+    {
+      "case": {
+        "n": 256,
+        "restarts": 32,
+        "kind": "ising",
+        "op": "annealing"
+      },
+      "median_seconds": 0.09556785600034345,
+      "samples_seconds": [
+        0.09657290700033627,
+        0.0954443419996096,
+        0.09556785600034345
+      ],
+      "cold_process_peak_rss_bytes": 235982848,
+      "cold_high_water_growth_bytes": 6160384,
+      "positive_operator_allocation_bytes": 81475412,
+      "best_energy": -347.07489013671875,
+      "torch": "2.14.0+cpu",
+      "python": "3.12.3"
+    },
+    {
+      "case": {
+        "n": 256,
+        "restarts": 32,
+        "kind": "ising",
+        "op": "convert"
+      },
+      "median_seconds": 0.0003513550000207033,
+      "samples_seconds": [
+        0.0004147849995206343,
+        0.0003513550000207033,
+        0.00034830900040105917
+      ],
+      "cold_process_peak_rss_bytes": 231337984,
+      "cold_high_water_growth_bytes": 1572864,
+      "positive_operator_allocation_bytes": 2297884,
+      "best_energy": null,
+      "torch": "2.14.0+cpu",
+      "python": "3.12.3"
+    },
+    {
+      "case": {
+        "n": 1024,
+        "restarts": 128,
+        "kind": "qubo",
+        "op": "construct"
+      },
+      "median_seconds": 0.011178404000020237,
+      "samples_seconds": [
+        0.011291818999779935,
+        0.011178404000020237,
+        0.010885740000048827
+      ],
+      "cold_process_peak_rss_bytes": 260825088,
+      "cold_high_water_growth_bytes": 12582912,
+      "positive_operator_allocation_bytes": null,
+      "best_energy": null,
+      "torch": "2.14.0+cpu",
+      "python": "3.12.3"
+    },
+    {
+      "case": {
+        "n": 1024,
+        "restarts": 128,
+        "kind": "qubo",
+        "op": "greedy"
+      },
+      "median_seconds": 0.14024351899934118,
+      "samples_seconds": [
+        0.14058551600010105,
+        0.14024351899934118,
+        0.13956106800014823
+      ],
+      "cold_process_peak_rss_bytes": 252944384,
+      "cold_high_water_growth_bytes": 5242880,
+      "positive_operator_allocation_bytes": null,
+      "best_energy": -89.87049102783203,
+      "torch": "2.14.0+cpu",
+      "python": "3.12.3"
+    },
+    {
+      "case": {
+        "n": 1024,
+        "restarts": 128,
+        "kind": "qubo",
+        "op": "annealing"
+      },
+      "median_seconds": 0.9234026999993148,
+      "samples_seconds": [
+        0.9234026999993148,
+        0.9253408760005186,
+        0.9221387160005179
+      ],
+      "cold_process_peak_rss_bytes": 254296064,
+      "cold_high_water_growth_bytes": 6029312,
+      "positive_operator_allocation_bytes": null,
+      "best_energy": -435.7661437988281,
+      "torch": "2.14.0+cpu",
+      "python": "3.12.3"
+    },
+    {
+      "case": {
+        "n": 1024,
+        "restarts": 128,
+        "kind": "ising",
+        "op": "construct"
+      },
+      "median_seconds": 0.012945758000569185,
+      "samples_seconds": [
+        0.013099558999783767,
+        0.012841550999837636,
+        0.012945758000569185
+      ],
+      "cold_process_peak_rss_bytes": 257302528,
+      "cold_high_water_growth_bytes": 8388608,
+      "positive_operator_allocation_bytes": null,
+      "best_energy": null,
+      "torch": "2.14.0+cpu",
+      "python": "3.12.3"
+    },
+    {
+      "case": {
+        "n": 1024,
+        "restarts": 128,
+        "kind": "ising",
+        "op": "greedy"
+      },
+      "median_seconds": 0.15949638299935032,
+      "samples_seconds": [
+        0.15949638299935032,
+        0.15886606999993091,
+        0.15996767400065437
+      ],
+      "cold_process_peak_rss_bytes": 266608640,
+      "cold_high_water_growth_bytes": 17301504,
+      "positive_operator_allocation_bytes": null,
+      "best_energy": -263.2508239746094,
+      "torch": "2.14.0+cpu",
+      "python": "3.12.3"
+    },
+    {
+      "case": {
+        "n": 1024,
+        "restarts": 128,
+        "kind": "ising",
+        "op": "annealing"
+      },
+      "median_seconds": 0.945908609000071,
+      "samples_seconds": [
+        0.942120743000487,
+        0.9504326920005042,
+        0.945908609000071
+      ],
+      "cold_process_peak_rss_bytes": 267108352,
+      "cold_high_water_growth_bytes": 18087936,
+      "positive_operator_allocation_bytes": null,
+      "best_energy": -1301.04736328125,
+      "torch": "2.14.0+cpu",
+      "python": "3.12.3"
+    },
+    {
+      "case": {
+        "n": 1024,
+        "restarts": 128,
+        "kind": "ising",
+        "op": "convert"
+      },
+      "median_seconds": 0.014505681000628101,
+      "samples_seconds": [
+        0.014481064000392507,
+        0.014505681000628101,
+        0.014594439000575221
+      ],
+      "cold_process_peak_rss_bytes": 262565888,
+      "cold_high_water_growth_bytes": 13369344,
+      "positive_operator_allocation_bytes": null,
+      "best_energy": null,
+      "torch": "2.14.0+cpu",
+      "python": "3.12.3"
+    }
+  ],
+  "processor": "AMD Ryzen 7 5825U with Radeon Graphics"
+}
